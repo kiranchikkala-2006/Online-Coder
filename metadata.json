@@ -1,0 +1,6 @@
+{
+  "name": "Online Coder",
+  "description": "A fast, secure, full-stack online code editor and sandbox for multiple programming languages with Monaco editor and Docker isolation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

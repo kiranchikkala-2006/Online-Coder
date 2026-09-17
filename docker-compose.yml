@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  codeforge-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: codeforge_server
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - EXECUTION_TIMEOUT=5000
+      - MEMORY_LIMIT=128m
+      - CPU_LIMIT=1.0
+    volumes:
+      # Mount Docker socket so CodeForge can spawn isolated sandbox containers locally
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/codeforge:/tmp/codeforge
+    networks:
+      - codeforge-net
+
+networks:
+  codeforge-net:
+    driver: bridge
