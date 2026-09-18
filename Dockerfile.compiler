@@ -1,0 +1,20 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    openjdk-17-jdk-headless \
+    gcc \
+    g++ \
+    golang-go \
+    rustc \
+    php-cli \
+    kotlin \
+    python3 \
+    nodejs \
+    npm \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /vercel/sandbox
+
+CMD ["/bin/bash"]

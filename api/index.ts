@@ -14,6 +14,9 @@ type Language =
 
 const MAX_OUTPUT = 20000;
 
+const CODEFORGE_IMAGE =
+  "vcr.vercel.com/kiran-project/onlinecompiler/codeforge-compiler:latest";
+
 function limitOutput(value: string): string {
   if (!value) return "";
 
@@ -25,62 +28,6 @@ function limitOutput(value: string): string {
     value.slice(0, MAX_OUTPUT) +
     "\n\n[Output truncated: maximum output limit reached]"
   );
-}
-
-function packageForLanguage(language: Language): string | null {
-  switch (language) {
-    case "java":
-      return "openjdk-17-jdk-headless";
-
-    case "c":
-      return "gcc";
-
-    case "cpp":
-      return "g++";
-
-    case "go":
-      return "golang-go";
-
-    case "rust":
-      return "rustc";
-
-    case "kotlin":
-      return "kotlin";
-
-    case "php":
-      return "php-cli";
-
-    default:
-      return null;
-  }
-}
-
-function executableForLanguage(language: Language): string | null {
-  switch (language) {
-    case "java":
-      return "javac";
-
-    case "c":
-      return "gcc";
-
-    case "cpp":
-      return "g++";
-
-    case "go":
-      return "go";
-
-    case "rust":
-      return "rustc";
-
-    case "kotlin":
-      return "kotlinc";
-
-    case "php":
-      return "php";
-
-    default:
-      return null;
-  }
 }
 
 function sourceFileForLanguage(language: Language): string {
@@ -186,11 +133,7 @@ php index.php < /tmp/codeforge-input.txt
 export default async function handler(req: any, res: any) {
   const url = req.url || "/";
 
-  console.log(
-    "CodeForge API:",
-    req.method,
-    url
-  );
+  console.log("CodeForge API:", req.method, url);
 
   // =========================================================
   // HEALTH CHECK
@@ -203,9 +146,10 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({
       status: "healthy",
       app: "CodeForge",
-      version: "2.0.0",
+      version: "3.0.0",
       runtime: "Vercel",
       sandbox: "Vercel Sandbox",
+      compilerImage: CODEFORGE_IMAGE,
       supportedLanguages: [
         "python",
         "cpp",
@@ -285,9 +229,7 @@ export default async function handler(req: any, res: any) {
     // INPUT VALUES
     // =======================================================
 
-    const language = String(
-      body.language || ""
-    )
+    const language = String(body.language || "")
       .toLowerCase()
       .trim() as Language;
 
@@ -298,10 +240,7 @@ export default async function handler(req: any, res: any) {
         ? body.input
         : "";
 
-    console.log(
-      "Language:",
-      language
-    );
+    console.log("Language:", language);
 
     console.log(
       "Code length:",
@@ -327,9 +266,7 @@ export default async function handler(req: any, res: any) {
       "php",
     ];
 
-    if (
-      !supportedLanguages.includes(language)
-    ) {
+    if (!supportedLanguages.includes(language)) {
       return res.status(400).json({
         status: "error",
         output: "",
@@ -358,12 +295,14 @@ export default async function handler(req: any, res: any) {
     }
 
     // =======================================================
-    // CREATE SANDBOX
+    // CREATE VERCEL SANDBOX
+    // USING CUSTOM CODEFORGE IMAGE
     // =======================================================
 
     const start = Date.now();
 
     sandbox = await Sandbox.create({
+      image: CODEFORGE_IMAGE,
       persistent: false,
       timeout: 180 * 1000,
     });
@@ -371,6 +310,11 @@ export default async function handler(req: any, res: any) {
     console.log(
       "Sandbox created:",
       sandbox.name
+    );
+
+    console.log(
+      "Using compiler image:",
+      CODEFORGE_IMAGE
     );
 
     // =======================================================
@@ -399,90 +343,6 @@ export default async function handler(req: any, res: any) {
       "Source file written:",
       sourceFile
     );
-
-    // =======================================================
-    // INSTALL COMPILER IF NEEDED
-    // =======================================================
-
-    const packageName =
-      packageForLanguage(language);
-
-    const executable =
-      executableForLanguage(language);
-
-    if (
-      packageName &&
-      executable
-    ) {
-      console.log(
-        `Checking compiler: ${executable}`
-      );
-
-      const check =
-        await sandbox.runCommand({
-          cmd: "bash",
-          args: [
-            "-lc",
-            `command -v ${executable}`,
-          ],
-        });
-
-      if (
-        check.exitCode !== 0
-      ) {
-        console.log(
-          `Installing ${packageName}...`
-        );
-
-        const update =
-          await sandbox.runCommand({
-            cmd: "apt-get",
-            args: [
-              "update",
-              "-qq",
-            ],
-            sudo: true,
-          });
-
-        if (
-          update.exitCode !== 0
-        ) {
-          const updateError =
-            await update.stderr();
-
-          throw new Error(
-            `Package manager update failed: ${updateError}`
-          );
-        }
-
-        const install =
-          await sandbox.runCommand({
-            cmd: "apt-get",
-            args: [
-              "install",
-              "-y",
-              "-qq",
-              packageName,
-            ],
-            sudo: true,
-          });
-
-        if (
-          install.exitCode !== 0
-        ) {
-          const installError =
-            await install.stderr();
-
-          throw new Error(
-            `Failed to install ${packageName}: ${installError}`
-          );
-        }
-
-        console.log(
-          `Installed ${packageName}`
-        );
-      }
-    }
 
     // =======================================================
     // EXECUTE PROGRAM
