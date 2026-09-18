@@ -1,12 +1,18 @@
 import { Sandbox } from "@vercel/sandbox";
 
 export default async function handler(req: any, res: any) {
+
   const url = req.url || "/";
 
-  // -----------------------------
-  // HEALTH
-  // -----------------------------
-  if (url.startsWith("/api/health")) {
+  console.log("CodeForge API:", req.method, url);
+
+  // =========================
+  // HEALTH CHECK
+  // =========================
+  if (
+    req.method === "GET" &&
+    url.includes("/api/health")
+  ) {
     return res.status(200).json({
       status: "healthy",
       app: "CodeForge",
@@ -18,10 +24,13 @@ export default async function handler(req: any, res: any) {
     });
   }
 
-  // -----------------------------
+  // =========================
   // LANGUAGES
-  // -----------------------------
-  if (url.startsWith("/api/languages")) {
+  // =========================
+  if (
+    req.method === "GET" &&
+    url.includes("/api/languages")
+  ) {
     return res.status(200).json({
       languages: [
         "python",
@@ -30,24 +39,39 @@ export default async function handler(req: any, res: any) {
     });
   }
 
-  // -----------------------------
-  // RUN CODE
-  // -----------------------------
-  if (url.startsWith("/api/run")) {
-    if (req.method !== "POST") {
-      return res.status(405).json({
-        status: "error",
-        error: "POST required"
-      });
-    }
+  // =========================
+  // CODE EXECUTION
+  // =========================
+  if (req.method === "POST") {
 
     try {
-      const {
-        language,
-        code,
-        input = ""
-      } = req.body || {};
 
+      let body = req.body;
+
+      // Vercel may provide body as a string
+      if (typeof body === "string") {
+        try {
+          body = JSON.parse(body);
+        } catch {
+          return res.status(400).json({
+            status: "error",
+            error: "Invalid JSON request"
+          });
+        }
+      }
+
+      body = body || {};
+
+      const language = String(body.language || "").toLowerCase();
+      const code = body.code;
+      const input = body.input || "";
+
+      console.log("Language:", language);
+      console.log("Code length:", code?.length || 0);
+
+      // =========================
+      // VALIDATE CODE
+      // =========================
       if (!code || typeof code !== "string") {
         return res.status(400).json({
           status: "error",
@@ -61,26 +85,45 @@ export default async function handler(req: any, res: any) {
       let command: string;
       let args: string[];
 
-      // -----------------------------
+      // =========================
       // PYTHON
-      // -----------------------------
-      if (language === "python" || language === "py") {
+      // =========================
+      if (
+        language === "python" ||
+        language === "py"
+      ) {
+
         command = "python";
-        args = ["-c", code];
+
+        args = [
+          "-c",
+          code
+        ];
+
       }
 
-      // -----------------------------
+      // =========================
       // JAVASCRIPT
-      // -----------------------------
+      // =========================
       else if (
         language === "javascript" ||
         language === "js"
       ) {
+
         command = "node";
-        args = ["-e", code];
+
+        args = [
+          "-e",
+          code
+        ];
+
       }
 
+      // =========================
+      // UNSUPPORTED LANGUAGE
+      // =========================
       else {
+
         return res.status(400).json({
           status: "error",
           output: "",
@@ -88,17 +131,24 @@ export default async function handler(req: any, res: any) {
           executionTime: 0,
           memoryUsageMB: 0
         });
+
       }
 
       const start = Date.now();
 
-      // Create isolated sandbox
+      // =========================
+      // CREATE SANDBOX
+      // =========================
       const sandbox = await Sandbox.create({
         persistent: false,
         timeout: 60 * 1000
       });
 
-      // Execute code
+      console.log("Sandbox created");
+
+      // =========================
+      // RUN CODE
+      // =========================
       const result = await sandbox.runCommand({
         cmd: command,
         args
@@ -109,32 +159,69 @@ export default async function handler(req: any, res: any) {
 
       const executionTime = Date.now() - start;
 
+      console.log(
+        "Exit code:",
+        result.exitCode
+      );
+
+      // =========================
+      // STOP SANDBOX
+      // =========================
       await sandbox.stop();
 
       return res.status(200).json({
-        status: result.exitCode === 0 ? "success" : "runtime_error",
+
+        status:
+          result.exitCode === 0
+            ? "success"
+            : "runtime_error",
+
         output,
+
         error,
+
         executionTime,
+
         memoryUsageMB: 0,
+
         sandbox: "vercel"
+
       });
 
     } catch (error: any) {
-      console.error("Sandbox execution error:", error);
+
+      console.error(
+        "Sandbox execution error:",
+        error
+      );
 
       return res.status(500).json({
+
         status: "system_error",
+
         output: "",
-        error: error?.message || "Sandbox execution failed",
+
+        error:
+          error?.message ||
+          "Sandbox execution failed",
+
         executionTime: 0,
+
         memoryUsageMB: 0,
+
         sandbox: "vercel"
+
       });
+
     }
   }
 
+  // =========================
+  // NOT FOUND
+  // =========================
   return res.status(404).json({
-    error: "Not found"
+    error: "Not found",
+    path: url,
+    method: req.method
   });
 }
